@@ -18,13 +18,22 @@ SECTION "Babybell", ROM0
 ; Wait for a vblank
 ;
 WaitForVBlank:                                  ; VBlank Check
-.loop:
         ld a, [rLY]                             ; Get the y position of VRAM
         cp 144                                  ; Check for V-BLANK
         jr c, WaitForVBlank            		; Run the check again
 
         xor a                                   ; ld a, 0; Set a to 0
         ld [rLCDC], a                           ; Turn off the LCD
+	ret
+
+MemCopy:
+	ld a, [de]
+	ld [hli], a
+	inc de
+	dec bc
+	ld a, b
+	or c
+	jr nz, MemCopy
 	ret
 
 ;
@@ -34,13 +43,7 @@ CopyFontIntoVRAM:
         ld hl, $9000                            ; Where to write our font
         ld de, FontTiles                        ; FontTile start in memory
         ld bc, FontTilesEnd - FontTiles         ; Font size in bytes
-        ld a, [de]                              ; Grab one byte from the source
-        ld [hli], a                             ; Store a in hl and post-increment
-        inc de                                  ; Move to next byte
-        dec bc                                  ; Decrement the bytes left
-        ld a, b                                 ; Check if b is 0, flags don't update for register b
-        or c                                    ; B != 0 || C != 0
-        jr nz, CopyFontIntoVRAM
+        call MemCopy
 	ret
 
 ;
@@ -107,9 +110,9 @@ Start:
 	xor a
 ; Lock up
 .lockup
-	inc a
-	ld [rSCY], a
-	ld [rSCX], a
+	; inc a
+	; ld [rSCY], a
+	; ld [rSCX], a
         jr .lockup
 
 ; --------------------------------------------
