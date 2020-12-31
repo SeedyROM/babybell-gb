@@ -10,51 +10,57 @@ ENDR
 
 SECTION "Babybell", ROM0
 
-Start:
-        
-.waitForVBlank:                                 ; VBlank Check
+; ---------------------------------------------------------------------------------------------------------
+; Global procedures
+; ---------------------------------------------------------------------------------------------------------
 
+;
+; Wait for a vblank
+;
+WaitForVBlank:                                  ; VBlank Check
+.loop:
         ld a, [rLY]                             ; Get the y position of VRAM
         cp 144                                  ; Check for V-BLANK
-        jr c, .waitForVBlank                    ; Run the check again
+        jr c, WaitForVBlank            		; Run the check again
 
         xor a                                   ; ld a, 0; Set a to 0
-        ld [rLCDC], a                           ; Turn off the LCD 
+        ld [rLCDC], a                           ; Turn off the LCD
+	ret
 
 ;
-; Copy from ROM to VRAM routine
-; hl = offset
-; de = source
-; bc = size
+; Load font data into VRAM at $9000
 ;
-        ; Load the font
+CopyFontIntoVRAM:
         ld hl, $9000                            ; Where to write our font
         ld de, FontTiles                        ; FontTile start in memory
         ld bc, FontTilesEnd - FontTiles         ; Font size in bytes
-.copyFont:
         ld a, [de]                              ; Grab one byte from the source
         ld [hli], a                             ; Store a in hl and post-increment
         inc de                                  ; Move to next byte
         dec bc                                  ; Decrement the bytes left
         ld a, b                                 ; Check if b is 0, flags don't update for register b
         or c                                    ; B != 0 || C != 0
-        jr nz, .copyFont
+        jr nz, CopyFontIntoVRAM
+	ret
 
 ;
-; Copy string routine
+; Copy string into VRAM routine
 ; hl = location
 ; de = source string
 ;
-        ld hl, $9800                            ; This will print the string at the top-left corner of the screen
-        ld de, StartMenuString
-.copyString
-        ld a, [de]
-        ld [hli], a
-        inc de
-        and a                                   ; Check if the byte we just copied is zero
-        jr nz, .copyString                      ; Continue if it's not
+CopyStringToVRAM:
+	ld a, [de]
+	inc de
+	and a
+	ret z
+	ld [hli], a
+	jr CopyStringToVRAM
 
-        ; Init display registers
+;
+; Initialize the game
+;
+Init:
+	; Init display registers
         ld a, %11100100
         ld [rBGP], a
 
@@ -69,19 +75,54 @@ Start:
         ld a, %10000001
         ld [rLCDC], a
 
+	ret
+
+
+; ---------------------------------------------------------------------------------------------------------
+; End global procedures
+; ---------------------------------------------------------------------------------------------------------
+
+; ---------------------------------------------------------------------------------------------------------
+; Entrypoint
+; ---------------------------------------------------------------------------------------------------------
+
+Start:
+	call WaitForVBlank			; Turn off the screen
+	call CopyFontIntoVRAM			; Load the font
+
+        ld hl, $9800                            ; Print some strings...
+        ld de, StartMenuString
+	call CopyStringToVRAM
+
 	ld hl, $9820
 	ld de, NewGameString
-	jp .copyString
+	call CopyStringToVRAM
 
+	ld hl, $9840
+	ld de, LoadSaveString
+	call CopyStringToVRAM
+
+	call Init
+
+	xor a
 ; Lock up
 .lockup
+	inc a
+	ld [rSCY], a
+	ld [rSCX], a
         jr .lockup
 
-SECTION "Font", ROM0
+; --------------------------------------------
+; Graphics
+; --------------------------------------------
 
-FontTiles:
-INCBIN "./assets/font.chr"
-FontTilesEnd:
+INCLUDE "./assets/font.inc"
+INCLUDE "./assets/world.inc"
+INCLUDE "./assets/world.asm"
+
+; --------------------------------------------
+; Constants
+; --------------------------------------------
 
 SECTION "Strings", ROM0
 
